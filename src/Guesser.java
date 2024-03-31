@@ -1,166 +1,129 @@
 import java.util.LinkedList;
 import java.util.Scanner;
+import java.util.function.BiPredicate;
+import java.util.stream.IntStream;
 
 public class Guesser {
-    static Scanner con = new Scanner(System.in);
-    static int number;                                  // загаданное/отгадываемое число
-    static int counter;                                 // счётчик вопросов
+    private static final Scanner con = new Scanner(System.in);
+    private static int number;                                  // загаданное/отгадываемое число
+    private static int counter;                                 // счётчик вопросов
     private static boolean bingo;                       // угадано ли число
-    final static int N = 1000;                          // верхний предел загадываемого
-    static int OUTPUT_WIDTH = N > 20 ?
+    private static int N = 1000;                          // верхний предел загадываемого
+    private static int OUTPUT_WIDTH = N > 20 ?
                               Math.min(20, (int) Math.sqrt(N)) : 20;    // ширина выводимого списка не более 20 в ряд
     static LinkedList<Integer> potentialValues = new LinkedList<>();    // все неисключённые значения отгадываемого
     private static boolean LIMITED_GAME = false;        // переключатель в ограниченный режим игры
     private static int LIMIT = 10;                      // ограничитель ходов для ограниченного режима
-    final private static String commands =
-                        "Цель игры - угадать число, случайно выбранное ЭВМ из названного диапазона.\n" +
-                        "Постарайтесь использовать как можно меньше вопросов.\n" +
-                        "Введите вопрос-команду, затем, после приглашения, число.\n" +  // на самом деле можно и вподряд
-                        "Допустимые команды:\n" +
-                        "\"больше\" - больше ли загаданное число, чем вводимое следом\n" +
-                        "\"делится\" - делится ли без остатка загаданное число на вводимое\n" +
-                        "\"содержит\" - содержит ли десятичная запись загаданного числа вводимое\n" +
-                        "\"равно\" - равно ли загаданное числе вводимому\n" +
-                        "\"какие\" - просмотр всех оставшихся возможных значений угадываемого\n" +
-                        "\"сдаюсь\" - завершение угадывания, раскрытие загаданного\n" +
-                        "\"справка\" - вывод этого текста\n" +
-                        "Для выхода из программы после завершения игры ответьте \"нет\"";
-    ;
+    final private static String COMMANDS =
+            """
+                    Цель игры - угадать число, случайно выбранное ЭВМ из названного диапазона.
+                    Постарайтесь использовать как можно меньше вопросов.
+                    Введите вопрос-команду, затем, после приглашения, число.
+                    Допустимые команды:
+                    "больше" - больше ли загаданное число, чем вводимое следом
+                    "делится" - делится ли без остатка загаданное число на вводимое
+                    "содержит" - содержит ли десятичная запись загаданного числа вводимое
+                    "равно" - равно ли загаданное числе вводимому
+                    "какие" - просмотр всех оставшихся возможных значений угадываемого
+                    "сдаюсь" - завершение угадывания, раскрытие загаданного
+                    "справка" - вывод этого текста
+                    Для выхода из программы после завершения игры ответьте "нет\"""";
 
     public static void main(String[] args) {
         // цикл работы программы
         while (true) {
             number = (int) (N * Math.random()) + 1;         // ЭВМ загадывает число
-            counter = 0;                                    // иницилизируются служебные переменные
+            counter = 0;                                    // инициализируются служебные переменные
             bingo = false;
+            boolean quit = false;
+
             potentialValues.clear();
-            for (int i = 1; i <= N; i++) potentialValues.add(i);     // сначала не исключён ни один вариант
-            System.out.println("Загадано число от 1 до " + N + " - вводи вопросы: делится / больше / содержит / равно\n" +
-                               "(\"справка\" для просмотра всех комманд)");
-            if (LIMITED_GAME) System.out.println("Игра ограничена в " + LIMIT + " вопросов.");  // при ограниченной игре
+            // сначала не исключён ни один вариант
+            IntStream.rangeClosed(1, N).forEach(potentialValues::add);
+
+            System.out.printf("Загадано число от 1 до %d - вводи вопросы: делится / больше / содержит / равно\n" +
+                    "(\"справка\" для просмотра всех команд)%n", N);
+            if (LIMITED_GAME) System.out.printf("Игра ограничена в %d вопросов.%n", LIMIT);  // при ограниченной игре
             // цикл угадываний
-            requiring:
-            while (true) {
-                    String command = con.next();
-                    switch (command) {
-                        case "делится":
-                            doesDivide();
-                            break;
-                        case "больше":
-                            isBigger();
-                            break;
-                        case "содержит":
-                            contains();
-                            break;
-                        case "равно":
-                            equals();
-                            break;
-                        case "какие" :
-                            showRemaining();
-                            break;
-                        case "сдаюсь":
-                            surrender();
-                            break requiring;
-                        case "справка" :
-                            System.out.println(commands);
+            while (!quit) {
+                String command = con.next();
+                System.out.println(switch (command) {
+                    case "делится" -> performCheck(beDivisible, "на ");
+                    case "больше" -> performCheck(beBigger, "скольки: ");
+                    case "содержит" -> performCheck(beContaining, "что: ");
+                    case "равно" -> performCheck(beEqual, "чему: ");
+                    case "какие" -> showRemaining();
+                    case "сдаюсь" -> {
+                        quit = true;
+                        yield finish();
                     }
-                    if (bingo) {
-                        win();
-                        break;
-                    }
-                    if (LIMITED_GAME && counter == LIMIT) {     // достижение предела вопросов (при ограниченной игре)
-                        surrender();
-                        break;
-                    }
+                    case "справка" -> COMMANDS;
+                    default -> "Неизвестное значение: " + command;
+                });
+                if (bingo && !quit || LIMITED_GAME && counter == LIMIT) {     // достижение предела вопросов (при ограниченной игре)
+                    System.out.println(finish());
+                    quit = true;
                 }
+            }
             if (toExit()) break;
         }
     }
 
-
-    private static void doesDivide() {                       // делится ли нацело
-        int divider = getInput("на: ");               // на какое число
-        System.out.println(number % divider == 0 ?
-                "да" : "нет");
+    private static String performCheck(BiPredicate<Integer, Integer> function, String prompt) {
         ++counter;
-        if (number % divider == 0) potentialValues.removeIf(n -> n % divider != 0);
-        else potentialValues.removeIf(n -> n % divider == 0);
-        printCurrentStat();
-    }
-
-    private static void isBigger() {                             // больше ли
-        int compare = getInput("скольки: ");              // какого числа
-        System.out.println(number > compare ?
-                "да" : "нет");
-        ++counter;
-        if (number > compare) potentialValues.removeIf(n -> n <= compare);
-        else potentialValues.removeIf(n -> n > compare);
-        printCurrentStat();
-    }
-
-    private static void contains() {                             // содержит ли
-        int cypher = getInput("что: ");                   // какую цифру
-        System.out.println(containsDigit(number, cypher) ?
-                "да" : "нет");
-        ++counter;
-        if (containsDigit(number, cypher)) potentialValues.removeIf(n -> !containsDigit(n, cypher));
-        else potentialValues.removeIf(n -> containsDigit(n, cypher));
-        printCurrentStat();
-    }
-
-    private static void equals() {                               // равняется ли
-        int guess = getInput("чему: ");                   // какому числу
-        if (number == guess) bingo = true;
-        System.out.println(bingo ?
-                "да" : "нет");
-        ++counter;
-        if (bingo) potentialValues.removeIf(n -> n != guess);
-        else potentialValues.removeIf(n -> n == guess);
-        if (!bingo) printCurrentStat();
+        int argument = getInput(prompt);
+        if (function.test(number, argument)) {
+            potentialValues.removeIf(n -> function.negate().test(n, argument));
+            if (function == beEqual) bingo = true;
+            return "да%nЗадано вопросов: %d%nВозможных вариантов ещё %d%n".formatted(counter, potentialValues.size());
+        } else {
+            potentialValues.removeIf(n -> function.test(n, argument));
+            return "нет%nЗадано вопросов: %d%nВозможных вариантов ещё %d%n".formatted(counter, potentialValues.size());
+        }
     }
 
     private static int getInput(String prompt) {                 // получить ввод
-//        String prefixOrInput = "";
-//        if (!con.hasNext()) prefixOrInput = con.next().trim(); // попытка поддержки альтернативных спообов ввода
-//        if (!prefixOrInput.equals(prompt)) {
             System.out.print(prompt);
             return con.nextInt();
-//        }
-//        return Integer.parseInt(prefixOrInput);
     }
 
-    private static void showRemaining() {                           // показать остающиеся варианты
-        for (int i = 0; i < potentialValues.size(); i++) {
-            System.out.printf("%-4d", potentialValues.get(i));
-            if ((i + 1) % OUTPUT_WIDTH == 0) System.out.println();
-        }
+    private static String showRemaining() {                           // показать остающиеся варианты
+        StringBuilder table = new StringBuilder();
+        IntStream.range(0, potentialValues.size()).forEach(i -> {
+            table.append("%-4d".formatted(potentialValues.get(i)));
+            if ((i + 1) % OUTPUT_WIDTH == 0) table.append("\n");
+        });
         if (potentialValues.size() % OUTPUT_WIDTH != 0)             // чтоб не пропускать после таблицы лишних строк
-            System.out.println();
+            table.append("\n");
+        return table.toString();
     }
 
-    private static void surrender() {                               // сдаваться
-        System.out.printf("Число было %d, задано %d вопросов.%n", number, counter);
+    private static String finish() {
+        return bingo ?
+                "Поздравляю! Число %d угадано за %d вопросов.%n".formatted(number, counter) :
+                "Число было %d, задано %d вопросов.%n".formatted(number, counter);
+
     }
 
-    private static void win() {                                     // побеждать
-        System.out.printf("Поздравляю! Число %d угадано за %d вопросов.%n", number, counter );
-    }                                                // возможо, за (counter - 1) вопросов, если не считать последний
-
-    private static boolean toExit() {                               // выходиь ли из программы
+    private static boolean toExit() {                               // выходить ли из программы
         System.out.println("\nИграть ещё раз?");
         return "нет".equals(con.next());
     }
 
     private static boolean containsDigit(int number, int digit) {   // вспомогательная функция
-        if (digit > 9 || digit < 0) return false;                   // определяет, содержится ли в числе цифра
+        if (digit > 9 || digit < 0)                                 // определяет, содержится ли в числе цифра
+            throw new IllegalArgumentException("Второй аргумент должен быть цифрой от 0 до 9.");
         do {
-            if (number % 10 == digit) return true;
+            if (Math.abs(number % 10) == digit) return true;
             number /= 10;
         } while (number != 0);
         return false;
     }
-    private static void printCurrentStat() {                        // вывод текущей статистики вопросов и вариантов
-        System.out.println("Задано вопросов: " + counter);
-        System.out.println("Возможных вариантов ещё " + potentialValues.size());
-    }
+
+
+    private static final BiPredicate<Integer, Integer> beDivisible = (x, i) -> x % i == 0;
+    private static final BiPredicate<Integer, Integer> beBigger = (x, i) -> x > i;
+    private static final BiPredicate<Integer, Integer> beContaining = Guesser::containsDigit;
+    private static final BiPredicate<Integer, Integer> beEqual = Integer::equals;
+
 }
