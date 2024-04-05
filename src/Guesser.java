@@ -1,4 +1,6 @@
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.function.BiPredicate;
 import java.util.stream.IntStream;
@@ -52,6 +54,7 @@ public class Guesser {
                     case "больше" -> performCheck(beBigger, "скольки: ");
                     case "содержит" -> performCheck(beContaining, "что: ");
                     case "равно" -> performCheck(beEqual, "чему: ");
+                    case "повтор" -> performCheck(repeatingDigits, null);
                     case "какие" -> showRemaining();
                     case "сдаюсь" -> {
                         quit = true;
@@ -71,7 +74,7 @@ public class Guesser {
 
     private static String performCheck(BiPredicate<Integer, Integer> function, String prompt) {
         ++counter;
-        int argument = getInput(prompt);
+        int argument = prompt != null ? getInput(prompt) : 0;
         if (function.test(number, argument)) {
             potentialValues.removeIf(n -> function.negate().test(n, argument));
             if (function == beEqual) bingo = true;
@@ -113,17 +116,38 @@ public class Guesser {
     private static boolean containsDigit(int number, int digit) {   // вспомогательная функция
         if (digit > 9 || digit < 0)                                 // определяет, содержится ли в числе цифра
             throw new IllegalArgumentException("Второй аргумент должен быть цифрой от 0 до 9.");
-        do {
-            if (Math.abs(number % 10) == digit) return true;
-            number /= 10;
-        } while (number != 0);
-        return false;
+
+        return splitInDigits(number).contains(digit);
     }
 
+    private static boolean repeatingDigits(int number, int mock) {
+        if (Math.abs(number) < 10) return false;
+
+        List<Integer> digits = splitInDigits(number);
+
+        return IntStream.range(0, digits.size() - 1)
+                .anyMatch(a ->
+                        IntStream.range(a + 1, digits.size())
+                            .anyMatch(b -> digits.get(a)
+                                    .equals(digits.get(b)))
+                );
+    }
+
+    private static List<Integer> splitInDigits(Integer number) {
+        List<Integer> digits = new ArrayList<>(5);
+        number = Math.abs(number);
+        do {
+            digits.add(number % 10);
+            number /= 10;
+        } while(number != 0);
+
+        return digits;
+    }
 
     private static final BiPredicate<Integer, Integer> beDivisible = (x, i) -> x % i == 0;
     private static final BiPredicate<Integer, Integer> beBigger = (x, i) -> x > i;
     private static final BiPredicate<Integer, Integer> beContaining = Guesser::containsDigit;
     private static final BiPredicate<Integer, Integer> beEqual = Integer::equals;
+    private static final BiPredicate<Integer, Integer> repeatingDigits = Guesser::repeatingDigits;
 
 }
